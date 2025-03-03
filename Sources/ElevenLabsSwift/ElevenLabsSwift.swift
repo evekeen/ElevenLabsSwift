@@ -239,21 +239,24 @@ public class ElevenLabsSDK {
         public let overrides: ConversationConfigOverride?
         public let customLlmExtraBody: [String: LlmExtraBodyValue]?
         public let dynamicVariables: [String: DynamicVariableValue]?
+        public let skipAudioSessionConfiguration: Bool
 
-        public init(signedUrl: String, overrides: ConversationConfigOverride? = nil, customLlmExtraBody: [String: LlmExtraBodyValue]? = nil, clientTools _: ClientTools = ClientTools(), dynamicVariables: [String: DynamicVariableValue]? = nil) {
+        public init(signedUrl: String, overrides: ConversationConfigOverride? = nil, customLlmExtraBody: [String: LlmExtraBodyValue]? = nil, clientTools _: ClientTools = ClientTools(), dynamicVariables: [String: DynamicVariableValue]? = nil, skipAudioSessionConfiguration: Bool = false) {
             self.signedUrl = signedUrl
             agentId = nil
             self.overrides = overrides
             self.customLlmExtraBody = customLlmExtraBody
             self.dynamicVariables = dynamicVariables
+            self.skipAudioSessionConfiguration = skipAudioSessionConfiguration
         }
 
-        public init(agentId: String, overrides: ConversationConfigOverride? = nil, customLlmExtraBody: [String: LlmExtraBodyValue]? = nil, clientTools _: ClientTools = ClientTools(), dynamicVariables: [String: DynamicVariableValue]? = nil) {
+        public init(agentId: String, overrides: ConversationConfigOverride? = nil, customLlmExtraBody: [String: LlmExtraBodyValue]? = nil, clientTools _: ClientTools = ClientTools(), dynamicVariables: [String: DynamicVariableValue]? = nil, skipAudioSessionConfiguration: Bool = false) {
             self.agentId = agentId
             signedUrl = nil
             self.overrides = overrides
             self.customLlmExtraBody = customLlmExtraBody
             self.dynamicVariables = dynamicVariables
+            self.skipAudioSessionConfiguration = skipAudioSessionConfiguration
         }
     }
 
@@ -680,22 +683,19 @@ public class ElevenLabsSDK {
         }
 
         private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-            guard let channelData = buffer.floatChannelData else {
-                return
-            }
+            guard let channelData = buffer.floatChannelData else { return }
 
             var sumOfSquares: Float = 0
             let channelCount = Int(buffer.format.channelCount)
-            let frameLength = Int(buffer.frameLength) // Convert to Int
 
             for channel in 0 ..< channelCount {
                 let data = channelData[channel]
-                for i in 0 ..< frameLength {
+                for i in 0 ..< Int(buffer.frameLength) {
                     sumOfSquares += data[i] * data[i]
                 }
             }
 
-            let rms = sqrt(sumOfSquares / Float(frameLength * channelCount))
+            let rms = sqrt(sumOfSquares / Float(buffer.frameLength * buffer.format.channelCount))
             let meterLevel = rms > 0 ? 20 * log10(rms) : -50.0 // Safeguarded
 
             // Normalize the meter level to a 0-1 range
@@ -735,7 +735,9 @@ public class ElevenLabsSDK {
         /// - Returns: A started `Conversation` instance
         public static func startSession(config: SessionConfig, callbacks: Callbacks = Callbacks(), clientTools: ClientTools? = nil) async throws -> Conversation {
             // Step 1: Configure the audio session
-            try ElevenLabsSDK.configureAudioSession()
+            if !config.skipAudioSessionConfiguration {
+                try ElevenLabsSDK.configureAudioSession()
+            }
 
             // Step 2: Create the WebSocket connection
             let connection = try await Connection.create(config: config)
@@ -1178,7 +1180,7 @@ public class ElevenLabsSDK {
         do {
             // Configure for voice chat with minimum latency
             try audioSession.setCategory(.playAndRecord,
-                                         mode: .voiceChat,
+                                         mode: .default,
                                          options: [.allowBluetooth])
 
             // Set preferred IO buffer duration for lower latency
