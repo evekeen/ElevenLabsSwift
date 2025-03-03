@@ -1180,7 +1180,7 @@ public class ElevenLabsSDK {
         do {
             // Configure for voice chat with minimum latency
             try audioSession.setCategory(.playAndRecord,
-                                         mode: .default,
+                                         mode: .voiceChat,
                                          options: [.allowBluetooth])
 
             // Set preferred IO buffer duration for lower latency
